@@ -1,7 +1,7 @@
 io = require 'socket.io'
 
 class ChatClientProxy
-    constructor: (@socket) ->
+    constructor: (@socket, @_parent) ->
         @socket.on 'nick', this.setNick
         @socket.on 'msg', this.sendMsg
         @socket.on 'people', this.sendNicks
@@ -11,16 +11,11 @@ class ChatClientProxy
 
         @id = @socket.id
 
-        @thoonk = require('thoonk').createClient()
-
-        @nicks = @thoonk.feed('chat:nicks')
-        @messages = @thoonk.feed('chat:messages', {max_length:50})
-
         this.setNick({nick: @id})
 
-        @nicks.subscribe {publish: this.recvJoin, edit: this.recvChangeNick, retract: this.recvLeave}
+        @_parent.nicks.subscribe {publish: this.recvJoin, edit: this.recvChangeNick, retract: this.recvLeave}
 
-        @messages.subscribe ({publish: console.log})
+        @_parent.messages.subscribe ({publish: console.log})
 
     recvJoin: (feed, id, data) =>
         nick = data['nick']
@@ -41,31 +36,31 @@ class ChatClientProxy
     setNick: (data) =>
         nick = data['nick']
         console.log("setNick:", nick)
-        @nicks.publish(JSON.stringify({nick:nick, id:this.id}), this.id)
+        @_parent.nicks.publish(JSON.stringify({nick:nick, id:this.id}), this.id)
 
     sendMsg: (data) =>
         from = this.id
         msg = data['msg']
         console.log "MSG '#{from}':'#{msg}'"
-        @messages.publish(JSON.stringify({from:from, msg:msg}))
+        @_parent.messages.publish(JSON.stringify({from:from, msg:msg}))
 
     sendNicks: =>
         console.log("sendNicks")
-        @nicks.getAll (err, reply) =>
+        @_parent.nicks.getAll (err, reply) =>
             console.log(reply)
             console.log(err)
             @socket.emit('people', reply)
 
     sendMsgs: =>
         console.log("sendMsgs")
-        @messages.getAll (err, reply) =>
+        @_parent.messages.getAll (err, reply) =>
             console.log(reply)
             console.log(err)
             @socket.emit('msgs', reply)
 
     leave: =>
         console.log('quit')
-        @nicks.retract(this.id)
+        @_parent.nicks.retract(this.id)
 
 
 class @Chat
