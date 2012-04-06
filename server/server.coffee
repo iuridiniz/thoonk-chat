@@ -6,7 +6,7 @@ class @Server
     constructor: (@_port) ->
         @http = http.createServer @_requestHandler
 
-    listen: ->
+    listen: =>
         @http.listen @_port
         
     _serveFile: (url, res) =>
