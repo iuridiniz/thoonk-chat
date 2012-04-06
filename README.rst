@@ -2,10 +2,12 @@ A chat using Thoonk
 ===================
 
 
+   npm -g install socket.io
+   npm -g install coofee
+   npm -g install thoonk
 
 ====================
-COMPILING
+COMPILING DAEMON
 ====================
 
-
-    coffee --compile --output public/js/ client/
+    coffee -w --compile --output public/lib/ client/
