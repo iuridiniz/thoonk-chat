@@ -1,51 +1,71 @@
 io = require 'socket.io'
 
-class ChatC
-    constructor: (@socket, @_parent) ->
+class ChatClientProxy
+    constructor: (@socket) ->
         @socket.on 'nick', this.setNick
-        @socket.on 'join', this.joinChannel
-        @socket.on 'leave', this.leaveChannel
         @socket.on 'msg', this.sendMsg
-        @socket.on 'channels', this.sendChannels
         @socket.on 'people', this.sendNicks
-        @socket.on 'quit', this.quit
-        @socket.on 'disconnect', this.quit
+        @socket.on 'msgs', this.sendMsgs
+        @socket.on 'leave', this.leave
+        @socket.on 'disconnect', this.leave
 
         @id = @socket.id
-        this.setNick({nick: this.id})
+
+        @thoonk = require('thoonk').createClient()
+
+        @nicks = @thoonk.feed('chat:nicks')
+        @messages = @thoonk.feed('chat:messages', {max_length:50})
+
+        this.setNick({nick: @id})
+
+        @nicks.subscribe {publish: this.recvJoin, edit: this.recvChangeNick, retract: this.recvLeave}
+
+        @messages.subscribe ({publish: console.log})
+
+    recvJoin: (feed, id, data) =>
+        nick = data['nick']
+        @socket.emit('join', {id: id, nick: nick})
+
+    recvChangeNick: (feed, id, data) =>
+        console.log("new nick")
+        nick = data['nick']
+        @socket.emit('new_nick', {id: id, new_nick: nick})
+
+    recvLeave: (feed, id, data) =>
+        @socket.emit('leave', {id: id})
+
+    recvMsg: (feed, id, data) =>
+        console.log("recvMsg")
+        @socket.emit('msg', JSON.parse(data))
 
     setNick: (data) =>
         nick = data['nick']
         console.log("setNick:", nick)
-        this._parent.nicks.publish(JSON.stringify({nick:nick, id:this.id}), this.id)
-
-    joinChannel: (data) =>
-        channel = data['channel']
-        console.log("joinChannel:", channel)
-
-    leaveChannel: (data) =>
-        channel = data['channel']
-        console.log("leaveChannel:", channel)
+        @nicks.publish(JSON.stringify({nick:nick, id:this.id}), this.id)
 
     sendMsg: (data) =>
-        dest = data['dest']
+        from = this.id
         msg = data['msg']
-        console.log("sendMsg:", dest, msg)
-
-    sendChannels: =>
-        console.log("sendChannels")
+        console.log "MSG '#{from}':'#{msg}'"
+        @messages.publish(JSON.stringify({from:from, msg:msg}))
 
     sendNicks: =>
         console.log("sendNicks")
-        this._parent.nicks.getAll (err, reply) =>
+        @nicks.getAll (err, reply) =>
             console.log(reply)
             console.log(err)
-            this.socket.emit('people', reply)
+            @socket.emit('people', reply)
 
-    quit: =>
+    sendMsgs: =>
+        console.log("sendMsgs")
+        @messages.getAll (err, reply) =>
+            console.log(reply)
+            console.log(err)
+            @socket.emit('msgs', reply)
+
+    leave: =>
         console.log('quit')
-        this._parent.nicks.retract(this.id)
-        this._parent = null
+        @nicks.retract(this.id)
 
 
 class @Chat
@@ -56,30 +76,17 @@ class @Chat
         @thoonk = require('thoonk').createClient()
 
         #clear
-        this.clear()
+        #this.clear()
 
         @nicks = @thoonk.feed('chat:nicks')
-        @channels = @thoonk.feed('chat:channels')
-        @servermessages = @thoonk.feed('chat:servermessages')
+        @messages = @thoonk.feed('chat:messages', {max_length:50})
 
-        @servermessages.publish("start-time", Date())
-        @connections = 0
-
-    publishConnections: =>
-        @servermessages.publish("connections", @connections)
-    
     clear: =>
         @thoonk.mredis.send_command "flushdb", [], =>
             console.log("database cleared")
         
     _connectionDone: (socket) =>
-        @connections++
-        socket.on 'disconnect', =>
-            @connections--
-            this.publishConnections()
-            
-        c = new ChatC(socket, this)
+        c = new ChatClientProxy(socket, this)
         socket.emit 'connected', {id:c.id}
-        this.publishConnections()
 
 
