@@ -2,6 +2,7 @@ A chat using Thoonk
 ===================
 
 pre-requisites::
+
    npm -g install socket.io
    npm -g install coofee
    npm -g install thoonk
