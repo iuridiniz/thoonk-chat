@@ -18,4 +18,4 @@ run webserver::
 
 open test page::
     
-    xdg-open http://localhost:8880/test.html
+    xdg-open http://localhost:8880/
